@@ -3,45 +3,57 @@ import fs from "fs-extra";
 import { fileURLToPath } from "url";
 import { spinner } from "@clack/prompts";
 import color from "picocolors";
+import { execa } from "execa"; // <--- Import this
 
-// Get current directory for ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export async function scaffoldProject(projectName: string) {
   const s = spinner();
-  s.start("Copying project files...");
-
   const projectDir = path.resolve(process.cwd(), projectName);
   const templateDir = path.resolve(__dirname, "../../templates/nextjs");
 
+  // 1. Copy Files
+  s.start("Copying files...");
   try {
-    // 1. Copy the entire template folder
     await fs.copy(templateDir, projectDir);
 
-    // 2. Update package.json name
     const pkgPath = path.join(projectDir, "package.json");
     const pkg = await fs.readJson(pkgPath);
     pkg.name = projectName;
     await fs.writeJson(pkgPath, pkg, { spaces: 2 });
 
-    // 3. Create a .gitignore (We create it dynamically so it isn't ignored in our repo)
-    const gitignoreContent = `
-node_modules
-.next
-.env
-.DS_Store
-    `;
+    const gitignoreContent = `node_modules\n.next\n.env\n.DS_Store\n.env.local`;
     await fs.writeFile(
       path.join(projectDir, ".gitignore"),
       gitignoreContent.trim()
     );
 
-    s.stop(`${color.green("Files copied successfully!")}`);
-    return true;
+    s.stop("Files copied!");
   } catch (error) {
-    s.stop(`${color.red("Failed to copy files.")}`);
+    s.stop("Failed to copy files");
     console.error(error);
-    return false;
+    return;
   }
+
+  // 2. Initialize Git
+  s.start("Initializing Git...");
+  try {
+    await execa("git", ["init"], { cwd: projectDir });
+    s.stop("Git initialized!");
+  } catch (error) {
+    s.stop("Failed to initialize Git (you can do it manually)");
+  }
+
+  // 3. Install Dependencies
+  s.start("Installing dependencies (this might take a moment)...");
+  try {
+    await execa("npm", ["install"], { cwd: projectDir });
+    s.stop("Dependencies installed!");
+  } catch (error) {
+    s.stop("Failed to install dependencies");
+  }
+
+  // Success Message
+  console.log(`\n${color.green("Success!")} Your project is ready.`);
 }
