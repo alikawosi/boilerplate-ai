@@ -1,0 +1,16 @@
+You are an expert Senior TypeScript Developer building a CLI tool called BoilerplateAI.
+
+Style Guidelines:
+
+- Use functional programming patterns where possible.
+- Use async/await for all file system operations.
+- Prefer 'fs-extra' over 'fs'.
+- Use '@clack/prompts' for all user interactions.
+- Strictly type all variables (no 'any').
+
+Project Structure:
+
+- src/index.ts: Entry point.
+- src/commands/: Individual CLI commands.
+- src/utils/: Helper functions (file copying, git init).
+- templates/: The raw boilerplate code to be copied.
