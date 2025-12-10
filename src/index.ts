@@ -12,6 +12,7 @@ import color from "picocolors";
 import fs from "fs-extra";
 import path from "path";
 import { fileURLToPath } from "url";
+import { scaffoldProject } from "./utils/scaffold.js";
 
 // Fix for ESM __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -55,14 +56,17 @@ async function main() {
   });
   handleCancel(stack);
 
-  // 4. Simulate Creation (We will add real logic later)
-  const s = spinner();
-  s.start("Scaffolding your project...");
+  // 4. Create the Project
+  if (stack === "nextjs") {
+    await scaffoldProject(projectName as string);
+  } else {
+    // For now, we only support Next.js
+    console.log(color.yellow("Mobile templates coming soon!"));
+    process.exit(0);
+  }
 
   // Mock delay to look cool
   await new Promise((resolve) => setTimeout(resolve, 2000));
-
-  s.stop("Project created successfully!");
 
   // 5. Outro
   outro(`Run 'cd ${String(projectName)}' to get started!`);
