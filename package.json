@@ -16,6 +16,8 @@
   },
   "type": "module",
   "devDependencies": {
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.87.1",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.10.2",
     "@types/react": "^19.2.7",
@@ -25,6 +27,7 @@
     "lucide-react": "^0.559.0",
     "next": "^16.0.8",
     "prettier": "^3.7.4",
+    "supabase": "^2.66.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
     "tailwindcss-animate": "^1.0.7",
