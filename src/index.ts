@@ -1,99 +1,69 @@
 #!/usr/bin/env node
+
 import {
   intro,
   outro,
   text,
-  select,
   multiselect,
-  spinner,
   isCancel,
   cancel,
 } from "@clack/prompts";
 import color from "picocolors";
-import path from "path";
-import { fileURLToPath } from "url";
-import { scaffoldProject } from "./utils/scaffold.js"; // Note the .js extension
-
-// Fix for ESM __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Helper to handle user cancelling (Ctrl+C)
-function handleCancel(value: unknown) {
-  if (isCancel(value)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
-}
+import { scaffoldProject } from "./utils/scaffold.js"; // Ensure extension is .js for ESM
 
 async function main() {
   console.clear();
 
-  // 1. Intro Header
-  intro(`${color.bgCyan(color.black(" BOILERPLATE-AI "))}`);
+  intro(
+    `${color.bgCyan(color.black("  SAAS-CLI  "))} ${color.cyan("The Ultimate SaaS Starter")}`
+  );
 
-  // 2. Ask for Project Name
+  // 1. Project Name Prompt
   const projectName = await text({
-    message: "What is the name of your project?",
-    placeholder: "my-startup",
-    defaultValue: "my-startup",
+    message: "What is your project named?",
+    placeholder: "my-saas-app",
     validate(value) {
-      if (value.length === 0) return "Name is required!";
-      if (/[^a-z0-9-]/.test(value))
-        return "Name should be lowercase, numbers, and hyphens only.";
+      if (value.length === 0) return "Project name is required!";
+      if (/[^a-zA-Z0-9-_]/.test(value))
+        return "Project name can only contain letters, numbers, dashes, and underscores.";
     },
   });
-  handleCancel(projectName);
 
-  // 3. Ask for Stack (The "Menu")
-  const stack = await select({
-    message: "Pick your stack type:",
-    options: [
-      {
-        value: "nextjs",
-        label: "Next.js Fullstack (Recommended)",
-        hint: "App Router + Tailwind + Shadcn",
-      },
-      {
-        value: "mobile",
-        label: "Mobile App (Coming Soon)",
-        hint: "Expo / React Native",
-      },
-    ],
-  });
-  handleCancel(stack);
-
-  if (stack === "mobile") {
-    outro(color.yellow("Mobile templates are coming in v1.1! Stay tuned."));
+  if (isCancel(projectName)) {
+    cancel("Operation cancelled.");
     process.exit(0);
   }
 
-  // 4. Ask for Integrations (Modules)
-  const integrations = await multiselect({
-    message: "Select the modules you need (Space to select):",
+  // 2. Module Selection Prompt
+  const modules = await multiselect({
+    message: "Which modules would you like to include?",
     options: [
       {
-        value: "supabase",
-        label: "Supabase",
-        hint: "Auth + Database + Middleware",
+        value: "stripe",
+        label: "Stripe (Payments)",
+        hint: "Subscriptions & Checkout",
       },
-      { value: "stripe", label: "Stripe", hint: "Payments + Webhooks" },
-      { value: "resend", label: "Resend", hint: "Email Service" },
+      {
+        value: "resend",
+        label: "Resend (Email)",
+        hint: "Transactional Emails",
+      },
+      { value: "openai", label: "OpenAI", hint: "AI Integration" },
+      // Add more modules here as you build them
     ],
-    required: false, // It's okay to select nothing
+    required: false,
   });
-  handleCancel(integrations);
 
-  // 5. Run the Scaffolder
-  // We cast integrations to string[] because multiselect returns string | symbol
-  await scaffoldProject(projectName as string, integrations as string[]);
+  if (isCancel(modules)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
 
-  // 6. Final Success Message is handled inside scaffoldProject, but we add a clean exit here.
-  // (Optional: You can move the 'outro' here if you want it outside the utils)
+  // 3. Confirm and Run
+  // We explicitly cast modules to string[] because multiselect returns string | symbol
+  await scaffoldProject(projectName as string, modules as string[]);
+
+  outro(color.green("You're all set! Happy coding."));
 }
 
-main().catch((err) => {
-  console.error(color.red("Unexpected error:"));
-  console.error(err);
-  process.exit(1);
-});
+main().catch(console.error);
