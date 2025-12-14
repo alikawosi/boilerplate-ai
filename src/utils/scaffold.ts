@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 export async function scaffoldProject(projectName: string, modules: string[]) {
   const s = spinner();
   const projectDir = path.resolve(process.cwd(), projectName);
+  const webTargetDir = path.join(projectDir, "web");
 
   // Define Template Paths relative to the built CLI location
   const infraDir = path.resolve(
@@ -28,8 +29,27 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
     process.exit(1);
   }
   await fs.ensureDir(projectDir);
+  await fs.ensureDir(webTargetDir);
 
-  // 2. Setup Infrastructure (Supabase) - Mandatory
+  // 2. Setup Root Configuration (Monorepo)
+  s.start("Setting up monorepo structure...");
+  try {
+    const rootPkg = {
+      name: projectName,
+      private: true,
+      workspaces: ["web", "native"],
+    };
+    await fs.writeJson(path.join(projectDir, "package.json"), rootPkg, {
+      spaces: 2,
+    });
+    s.stop("Monorepo structure configured.");
+  } catch (error) {
+    s.stop("Failed to setup monorepo structure.");
+    console.error(error);
+    process.exit(1);
+  }
+
+  // 3. Setup Infrastructure (Supabase) - Mandatory
   s.start("Setting up database infrastructure (Supabase)...");
   try {
     // Copy to a 'supabase' folder in the root
@@ -41,17 +61,17 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
     process.exit(1);
   }
 
-  // 3. Setup Frontend (Next.js)
+  // 4. Setup Frontend (Next.js)
   s.start("Scaffolding Next.js application...");
   try {
-    // Copy Next.js files to the ROOT of the project
-    await fs.copy(webDir, projectDir);
+    // Copy Next.js files to the WEB folder
+    await fs.copy(webDir, webTargetDir);
 
-    // Update package.json name
-    const pkgPath = path.join(projectDir, "package.json");
+    // Update package.json name in WEB folder
+    const pkgPath = path.join(webTargetDir, "package.json");
     if (await fs.pathExists(pkgPath)) {
       const pkg = await fs.readJson(pkgPath);
-      pkg.name = projectName;
+      pkg.name = `${projectName}-web`;
       await fs.writeJson(pkgPath, pkg, { spaces: 2 });
     }
 
@@ -62,7 +82,7 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
     process.exit(1);
   }
 
-  // 4. Inject Selected Modules
+  // 5. Inject Selected Modules
   if (modules.length > 0) {
     s.start(`Injecting modules: ${modules.join(", ")}...`);
 
@@ -72,7 +92,8 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
       if (await fs.pathExists(moduleSource)) {
         // A. Handle .env merging logic
         const envSourcePath = path.join(moduleSource, ".env.example");
-        const envTargetPath = path.join(projectDir, ".env.example");
+        // Target is now inside web folder
+        const envTargetPath = path.join(webTargetDir, ".env.example");
 
         if (await fs.pathExists(envSourcePath)) {
           const envContent = await fs.readFile(envSourcePath, "utf-8");
@@ -91,8 +112,8 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
         }
 
         // B. Copy module files (excluding .env.example)
-        // This will merge folders like 'app', 'components', 'lib' automatically
-        await fs.copy(moduleSource, projectDir, {
+        // Merge into web directory
+        await fs.copy(moduleSource, webTargetDir, {
           overwrite: true,
           filter: (src) => !src.endsWith(".env.example"),
         });
@@ -101,8 +122,9 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
     s.stop("Modules injected successfully.");
   }
 
-  // 5. Create System Files (.gitignore)
+  // 6. Create System Files (.gitignore)
   s.start("Creating system files...");
+  // .gitignore stays at root
   const gitignoreContent = `
 node_modules
 .next
@@ -121,7 +143,7 @@ supabase/.temp
   );
   s.stop("System files created.");
 
-  // 6. Initialize Git
+  // 7. Initialize Git
   s.start("Initializing Git...");
   try {
     await execa("git", ["init"], { cwd: projectDir });
@@ -130,7 +152,7 @@ supabase/.temp
     s.stop("Skipped Git initialization (git not found).");
   }
 
-  // 7. Install Dependencies
+  // 8. Install Dependencies
   s.start("Installing dependencies...");
 
   // Base dependencies always needed for the scaffold
@@ -142,14 +164,18 @@ supabase/.temp
   if (modules.includes("openai")) dependenciesToInstall.push("openai");
 
   try {
-    // 1. Install standard Next.js deps from the template's package.json
+    // 1. Install root/workspace dependencies
     await execa("npm", ["install"], { cwd: projectDir });
 
-    // 2. Install added module dependencies
+    // 2. Install added module dependencies into web workspace
     if (dependenciesToInstall.length > 0) {
-      await execa("npm", ["install", ...dependenciesToInstall], {
-        cwd: projectDir,
-      });
+      await execa(
+        "npm",
+        ["install", ...dependenciesToInstall, "--workspace=web"],
+        {
+          cwd: projectDir,
+        }
+      );
     }
     s.stop("Dependencies installed.");
   } catch (error) {
@@ -159,7 +185,7 @@ supabase/.temp
     );
     console.error(
       color.yellow(
-        `  Please run 'npm install ${dependenciesToInstall.join(" ")}' manually.`
+        `  Please run 'npm install' and 'npm install ${dependenciesToInstall.join(" ")} --workspace=web' manually.`
       )
     );
   }
@@ -171,8 +197,8 @@ supabase/.temp
   console.log(`\nNext steps:`);
   console.log(`  1. ${color.cyan(`cd ${projectName}`)}`);
   console.log(
-    `  2. ${color.cyan("cp .env.example .env.local")} (Fill in your keys)`
+    `  2. ${color.cyan("cd web && cp .env.example .env.local")} (Fill in your keys)`
   );
-  console.log(`  3. ${color.cyan("npm run dev")}`);
+  console.log(`  3. ${color.cyan("npm run dev --workspace=web")}`);
   console.log(`  4. ${color.cyan("npx supabase start")} (To run local DB)`);
 }
