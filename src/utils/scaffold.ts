@@ -8,10 +8,15 @@ import { execa } from "execa";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export async function scaffoldProject(projectName: string, modules: string[]) {
+export async function scaffoldProject(
+  projectName: string,
+  modules: string[],
+  withMobile: boolean = false
+) {
   const s = spinner();
   const projectDir = path.resolve(process.cwd(), projectName);
   const webTargetDir = path.join(projectDir, "web");
+  const nativeTargetDir = path.join(projectDir, "native");
 
   // Define Template Paths relative to the built CLI location
   const infraDir = path.resolve(
@@ -20,6 +25,7 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
   );
   const webDir = path.resolve(__dirname, "../../templates/web/nextjs");
   const modulesDir = path.resolve(__dirname, "../../templates/modules");
+  const nativeDir = path.resolve(__dirname, "../../templates/native");
 
   // 1. Validate & Create Root Directory
   if (fs.existsSync(projectDir)) {
@@ -30,14 +36,22 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
   }
   await fs.ensureDir(projectDir);
   await fs.ensureDir(webTargetDir);
+  if (withMobile) {
+    await fs.ensureDir(nativeTargetDir);
+  }
 
   // 2. Setup Root Configuration (Monorepo)
   s.start("Setting up monorepo structure...");
   try {
+    const workspaces = ["web"];
+    if (withMobile) {
+      workspaces.push("native");
+    }
+
     const rootPkg = {
       name: projectName,
       private: true,
-      workspaces: ["web", "native"],
+      workspaces,
     };
     await fs.writeJson(path.join(projectDir, "package.json"), rootPkg, {
       spaces: 2,
@@ -122,7 +136,57 @@ export async function scaffoldProject(projectName: string, modules: string[]) {
     s.stop("Modules injected successfully.");
   }
 
-  // 6. Create System Files (.gitignore)
+  // 6. Setup Mobile App (Optional)
+  if (withMobile) {
+    s.start("Scaffolding Mobile App (Expo)...");
+    if (await fs.pathExists(nativeDir)) {
+      try {
+        await fs.copy(nativeDir, nativeTargetDir);
+
+        // Update package.json name to just "projectName" as requested
+        const pkgPath = path.join(nativeTargetDir, "package.json");
+        if (await fs.pathExists(pkgPath)) {
+          const pkg = await fs.readJson(pkgPath);
+          pkg.name = projectName;
+          await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+        }
+
+        // Update app.json (expo.name and expo.slug)
+        const appJsonPath = path.join(nativeTargetDir, "app.json");
+        if (await fs.pathExists(appJsonPath)) {
+          const appJson = await fs.readJson(appJsonPath);
+          if (appJson.expo) {
+            appJson.expo.name = projectName;
+            appJson.expo.slug = projectName;
+          }
+          await fs.writeJson(appJsonPath, appJson, { spaces: 2 });
+        }
+
+        // Copy .env from web to native
+        // We use the fully constructed .env.example from web as the base .env for native
+        const webEnvPath = path.join(webTargetDir, ".env.example");
+        const nativeEnvPath = path.join(nativeTargetDir, ".env");
+        if (await fs.pathExists(webEnvPath)) {
+          await fs.copy(webEnvPath, nativeEnvPath);
+        }
+
+        s.stop("Mobile App scaffolded.");
+      } catch (error) {
+        s.stop("Failed to copy mobile template.");
+        console.error(error);
+        process.exit(1);
+      }
+    } else {
+      s.stop("Mobile template not found.");
+      console.warn(
+        color.yellow(
+          `⚠ Mobile template not found at ${nativeDir}. Skipping mobile scaffold.`
+        )
+      );
+    }
+  }
+
+  // 7. Create System Files (.gitignore)
   s.start("Creating system files...");
   // .gitignore stays at root
   const gitignoreContent = `
@@ -143,7 +207,7 @@ supabase/.temp
   );
   s.stop("System files created.");
 
-  // 7. Initialize Git
+  // 8. Initialize Git
   s.start("Initializing Git...");
   try {
     await execa("git", ["init"], { cwd: projectDir });
@@ -152,7 +216,7 @@ supabase/.temp
     s.stop("Skipped Git initialization (git not found).");
   }
 
-  // 8. Install Dependencies
+  // 9. Install Dependencies
   s.start("Installing dependencies...");
 
   // Base dependencies always needed for the scaffold
@@ -165,6 +229,7 @@ supabase/.temp
 
   try {
     // 1. Install root/workspace dependencies
+    // This will install dependencies for all workspaces defined in package.json
     await execa("npm", ["install"], { cwd: projectDir });
 
     // 2. Install added module dependencies into web workspace
@@ -185,20 +250,35 @@ supabase/.temp
     );
     console.error(
       color.yellow(
-        `  Please run 'npm install' and 'npm install ${dependenciesToInstall.join(" ")} --workspace=web' manually.`
+        `  Please run 'npm install' and 'npm install ${dependenciesToInstall.join(
+          " "
+        )} --workspace=web' manually.`
       )
     );
   }
 
   // Final Success Message
   console.log(
-    `\n${color.bgGreen(color.black(" SUCCESS "))} Project created at ${color.green(projectDir)}`
+    `\n${color.bgGreen(color.black(" SUCCESS "))} Project created at ${color.green(
+      projectDir
+    )}`
   );
   console.log(`\nNext steps:`);
   console.log(`  1. ${color.cyan(`cd ${projectName}`)}`);
   console.log(
-    `  2. ${color.cyan("cd web && cp .env.example .env.local")} (Fill in your keys)`
+    `  2. ${color.cyan(
+      "cd web && cp .env.example .env.local"
+    )} (Fill in your keys)`
   );
   console.log(`  3. ${color.cyan("npm run dev --workspace=web")}`);
-  console.log(`  4. ${color.cyan("npx supabase start")} (To run local DB)`);
+  if (withMobile) {
+    console.log(
+      `  4. ${color.cyan("cd native && npx expo start")} (To run mobile app)`
+    );
+  }
+  console.log(
+    `  ${withMobile ? "5" : "4"}. ${color.cyan(
+      "npx supabase start"
+    )} (To run local DB)`
+  );
 }
