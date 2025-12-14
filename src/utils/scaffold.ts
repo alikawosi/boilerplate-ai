@@ -25,7 +25,7 @@ export async function scaffoldProject(
   );
   const webDir = path.resolve(__dirname, "../../templates/web/nextjs");
   const modulesDir = path.resolve(__dirname, "../../templates/modules");
-  const nativeDir = path.resolve(__dirname, "../../templates/native");
+  const nativeDir = path.resolve(__dirname, "../../templates/native/expo");
 
   // 1. Validate & Create Root Directory
   if (fs.existsSync(projectDir)) {
@@ -96,47 +96,7 @@ export async function scaffoldProject(
     process.exit(1);
   }
 
-  // 5. Inject Selected Modules
-  if (modules.length > 0) {
-    s.start(`Injecting modules: ${modules.join(", ")}...`);
-
-    for (const module of modules) {
-      const moduleSource = path.join(modulesDir, module);
-
-      if (await fs.pathExists(moduleSource)) {
-        // A. Handle .env merging logic
-        const envSourcePath = path.join(moduleSource, ".env.example");
-        // Target is now inside web folder
-        const envTargetPath = path.join(webTargetDir, ".env.example");
-
-        if (await fs.pathExists(envSourcePath)) {
-          const envContent = await fs.readFile(envSourcePath, "utf-8");
-
-          if (await fs.pathExists(envTargetPath)) {
-            // Read current content to check if it ends with a newline
-            const currentEnv = await fs.readFile(envTargetPath, "utf-8");
-            const prefix = currentEnv.endsWith("\n") ? "" : "\n";
-            await fs.appendFile(
-              envTargetPath,
-              `${prefix}# Module: ${module}\n${envContent}\n`
-            );
-          } else {
-            await fs.writeFile(envTargetPath, envContent);
-          }
-        }
-
-        // B. Copy module files (excluding .env.example)
-        // Merge into web directory
-        await fs.copy(moduleSource, webTargetDir, {
-          overwrite: true,
-          filter: (src) => !src.endsWith(".env.example"),
-        });
-      }
-    }
-    s.stop("Modules injected successfully.");
-  }
-
-  // 6. Setup Mobile App (Optional)
+  // 5. Setup Mobile App (Optional) - Moved before modules to ensure folder exists
   if (withMobile) {
     s.start("Scaffolding Mobile App (Expo)...");
     if (await fs.pathExists(nativeDir)) {
@@ -184,6 +144,84 @@ export async function scaffoldProject(
         )
       );
     }
+  }
+
+  // 6. Inject Selected Modules
+  if (modules.length > 0) {
+    s.start(`Injecting modules: ${modules.join(", ")}...`);
+
+    for (const module of modules) {
+      const moduleSource = path.join(modulesDir, module);
+
+      if (await fs.pathExists(moduleSource)) {
+        const hasWeb = await fs.pathExists(path.join(moduleSource, "web"));
+        const hasNative = await fs.pathExists(
+          path.join(moduleSource, "native")
+        );
+
+        // Helper function to inject files and merge env
+        const inject = async (
+          source: string,
+          target: string,
+          envTarget: string
+        ) => {
+          // A. Handle .env merging logic
+          const envSourcePath = path.join(source, ".env.example");
+
+          if (await fs.pathExists(envSourcePath)) {
+            const envContent = await fs.readFile(envSourcePath, "utf-8");
+
+            if (await fs.pathExists(envTarget)) {
+              // Read current content to check if it ends with a newline
+              const currentEnv = await fs.readFile(envTarget, "utf-8");
+              const prefix = currentEnv.endsWith("\n") ? "" : "\n";
+              await fs.appendFile(
+                envTarget,
+                `${prefix}# Module: ${module}\n${envContent}\n`
+              );
+            } else {
+              await fs.writeFile(envTarget, envContent);
+            }
+          }
+
+          // B. Copy module files (excluding .env.example)
+          await fs.copy(source, target, {
+            overwrite: true,
+            filter: (src) => !src.endsWith(".env.example"),
+          });
+        };
+
+        if (hasWeb || hasNative) {
+          // 1. Web Injection
+          if (hasWeb) {
+            await inject(
+              path.join(moduleSource, "web"),
+              webTargetDir,
+              path.join(webTargetDir, ".env.example")
+            );
+          }
+
+          // 2. Native Injection
+          if (withMobile && hasNative) {
+            // Ensure native directory exists (it should, but safety first)
+            await fs.ensureDir(nativeTargetDir);
+            await inject(
+              path.join(moduleSource, "native"),
+              nativeTargetDir,
+              path.join(nativeTargetDir, ".env") // Native uses .env directly
+            );
+          }
+        } else {
+          // 3. Fallback: Legacy structure (assume web-only)
+          await inject(
+            moduleSource,
+            webTargetDir,
+            path.join(webTargetDir, ".env.example")
+          );
+        }
+      }
+    }
+    s.stop("Modules injected successfully.");
   }
 
   // 7. Create System Files (.gitignore)
