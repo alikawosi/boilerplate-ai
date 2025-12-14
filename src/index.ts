@@ -5,6 +5,7 @@ import {
   outro,
   text,
   multiselect,
+  confirm,
   isCancel,
   cancel,
 } from "@clack/prompts";
@@ -59,9 +60,24 @@ async function main() {
     process.exit(0);
   }
 
-  // 3. Confirm and Run
+  // 3. Mobile App Prompt
+  const withMobile = await confirm({
+    message: "Do you want to include a Mobile App (Expo)?",
+    initialValue: false,
+  });
+
+  if (isCancel(withMobile)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
+
+  // 4. Confirm and Run
   // We explicitly cast modules to string[] because multiselect returns string | symbol
-  await scaffoldProject(projectName as string, modules as string[]);
+  await scaffoldProject(
+    projectName as string,
+    modules as string[],
+    withMobile as boolean
+  );
 
   outro(color.green("You're all set! Happy coding."));
 }
