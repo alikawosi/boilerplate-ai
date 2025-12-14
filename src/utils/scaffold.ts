@@ -89,6 +89,14 @@ export async function scaffoldProject(
       await fs.writeJson(pkgPath, pkg, { spaces: 2 });
     }
 
+    // Replace "BoilerplateAI" with the actual project name in Navbar
+    const navbarPath = path.join(webTargetDir, "components/layout/Navbar.tsx");
+    if (await fs.pathExists(navbarPath)) {
+      let navbarContent = await fs.readFile(navbarPath, "utf-8");
+      navbarContent = navbarContent.replace("BoilerplateAI", projectName);
+      await fs.writeFile(navbarPath, navbarContent);
+    }
+
     s.stop("Next.js application scaffolded.");
   } catch (error) {
     s.stop("Failed to copy frontend template.");
