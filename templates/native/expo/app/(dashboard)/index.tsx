@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
@@ -15,16 +15,20 @@ import {
 import { DashboardHeader } from "./_components/DashboardHeader";
 
 export default function DashboardScreen() {
+  async function handleSignOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      Alert.alert("Error signing out", error.message);
+    }
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-background">
       <ScrollView contentContainerStyle={{ padding: 20 }}>
         {/* Header Component */}
         <View className="flex-row justify-between items-start">
           <DashboardHeader title="Overview" />
-          <TouchableOpacity
-            onPress={() => supabase.auth.signOut()}
-            className="mt-2"
-          >
+          <TouchableOpacity onPress={handleSignOut} className="mt-2">
             <Ionicons name="log-out-outline" size={24} color="gray" />
           </TouchableOpacity>
         </View>

@@ -9,11 +9,14 @@ import {
 } from "react-native";
 import { supabase } from "../../lib/supabase";
 import { Stack } from "expo-router";
+import Constants from "expo-constants";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const projectName = Constants.expoConfig?.name || "Boilerplate App";
 
   async function signInWithEmail() {
     setLoading(true);
@@ -33,15 +36,16 @@ export default function LoginScreen() {
       password,
     });
 
-    if (error) Alert.alert("Check your inbox", "Please verify your email.");
+    if (error) Alert.alert("Error", error.message);
+    else Alert.alert("Check your inbox", "Please verify your email.");
     setLoading(false);
   }
 
   return (
     <View className="flex-1 justify-center p-8 bg-white">
       <Stack.Screen options={{ title: "Login", headerShown: false }} />
-      <Text className="text-3xl font-bold mb-8 text-center text-black">
-        BoilerplateAI
+      <Text className="text-3xl font-bold mb-8 text-center text-foreground">
+        {projectName}
       </Text>
 
       <View className="gap-4">
