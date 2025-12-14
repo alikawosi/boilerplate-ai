@@ -258,7 +258,7 @@ supabase/.temp
   s.start("Installing dependencies...");
 
   // Base dependencies always needed for the scaffold
-  const dependenciesToInstall = ["@supabase/supabase-js", "@supabase/ssr"];
+  const dependenciesToInstall: string[] = [];
 
   // Module specific dependencies
   if (modules.includes("stripe")) dependenciesToInstall.push("stripe");
